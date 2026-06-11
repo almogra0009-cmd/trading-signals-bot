@@ -1,0 +1,49 @@
+name: Daily heartbeat
+
+on:
+  schedule:
+    # 17:00 UTC = 20:00 (8pm) Israel time at UTC+3 (IDT, summer).
+    # Note: GitHub cron has no timezone support, so in Israel winter (UTC+2)
+    # this lands at 7pm. Change to "0 18 * * *" if you prefer 8pm year-round
+    # during standard time.
+    - cron: "0 17 * * *"
+  workflow_dispatch: {}   # lets you send a heartbeat on demand from the Actions tab
+
+permissions:
+  contents: read
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      # Keep WATCHLIST / cap in sync with scan.yml so the summary is accurate.
+      WATCHLIST: "SPY,QQQ,BTC-USD,ETH-USD,NVDA,AAPL,TSLA,MSFT"
+      MAX_ALERTS_PER_DAY: "3"
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Pull the latest state saved by the scan workflow to read today's count.
+      - name: Restore alert state
+        uses: actions/cache/restore@v4
+        with:
+          path: state.json
+          key: heartbeat-${{ github.run_id }}
+          restore-keys: |
+            bot-state-
+
+      - name: Send heartbeat
+        run: python heartbeat.py
