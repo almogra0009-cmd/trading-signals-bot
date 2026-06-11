@@ -1,0 +1,20 @@
+# Secrets — never commit
+.env
+
+# Local runtime artifacts
+.venv/
+bot.log
+bot.log.*
+state.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Editor / OS / local tooling
+.claude/
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

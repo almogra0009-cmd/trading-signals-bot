@@ -1,0 +1,77 @@
+name: Trading signals scan
+
+on:
+  schedule:
+    # Every 15 minutes (cron is in UTC). GitHub may delay scheduled runs by a
+    # few minutes — sometimes more — when the platform is under heavy load.
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}   # lets you trigger a run manually from the Actions tab
+
+# Don't let a slow run overlap the next scheduled one.
+concurrency:
+  group: trading-scan
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # ---- Secrets (set these in repo Settings > Secrets and variables > Actions) ----
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      # ---- Strategy config (non-secret; edit here to retune the cloud bot) ----
+      WATCHLIST: "SPY,QQQ,BTC-USD,ETH-USD,NVDA,AAPL,TSLA,MSFT"
+      BAR_INTERVAL: "15m"
+      LOOKBACK_PERIOD: "60d"
+      RSI_PERIOD: "14"
+      RSI_OVERSOLD: "28"
+      RSI_OVERBOUGHT: "72"
+      MACD_FAST: "12"
+      MACD_SLOW: "26"
+      MACD_SIGNAL: "9"
+      ATR_PERIOD: "14"
+      VOLUME_AVG_PERIOD: "20"
+      VOLUME_SPIKE_PCT: "150"
+      ATR_STOP_MULT: "1.5"
+      TARGET1_R: "1.5"
+      TARGET2_R: "3.0"
+      USE_SENTIMENT: "true"
+      ALERT_COOLDOWN_MINUTES: "120"
+      MAX_ALERTS_PER_DAY: "3"
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Restore the cooldown / daily-cap state saved by the previous run.
+      - name: Restore alert state
+        uses: actions/cache/restore@v4
+        with:
+          path: state.json
+          key: bot-state-${{ github.run_id }}
+          restore-keys: |
+            bot-state-
+
+      - name: Run one scan
+        run: python ci_scan.py
+
+      # Persist the updated state for the next run (unique key per run).
+      - name: Save alert state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: state.json
+          key: bot-state-${{ github.run_id }}
